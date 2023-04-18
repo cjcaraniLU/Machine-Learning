@@ -1,0 +1,103 @@
+---
+title: "Week 3 Codes - KNN Classification"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+```
+
+#### ---------------------------------------------------------------------------
+### Load dataset
+
+```{r, message=FALSE}
+library(ISLR2)   # load library
+
+data("Default")   # load dataset
+```
+
+```{r}
+head(Default)   # print first six observations
+```
+
+```{r, message=FALSE}
+table(Default$default)   # class frequencies
+```
+
+
+#### ---------------------------------------------------------------------------
+### Split data
+
+```{r, message = FALSE}
+set.seed(041323)  # fix the random number generator for reproducibility
+
+library(caret) # load library
+
+train_index <- createDataPartition(y = Default$default, p = 0.7, list = FALSE) # split available data into 70% training and 30% test datasets
+
+Default_train <- Default[train_index,]   # training data, use this dataset to build model
+
+Default_test <- Default[-train_index,]   # test data, use this dataset to evaluate model's performance. These are rows that are NOT in the training dataset.
+```
+
+
+#### ---------------------------------------------------------------------------
+### K-NN Classifier
+
+```{r, message=FALSE}
+library(caret)   # load package
+
+knnfit <- knn3(formula = default ~ balance, data = Default_train, k = 10)   # fit 10-nn model
+```
+
+
+```{r}
+knn_class_preds_1 <- predict(object = knnfit, newdata = Default_test, type = c("class"))   # obtain default class label predictions (threshold = 0.5)
+```
+
+
+```{r}
+knnfit_prob_preds <- predict(object = knnfit, newdata = Default_test, type = c("prob"))   # obtain predictions as probabilities
+
+threshold <- 0.5   # set threshold
+
+knnfit_class_preds_2 <- factor(ifelse(knnfit_prob_preds[,2] > threshold, "Yes", "No"))   # obtain predictions as class labels
+```
+
+
+```{r}
+# create confusion matrix
+
+# use the following code only when all predictions are from the same class
+# levels(knn_class_preds_1) = c("No", "Yes") 
+
+confusionMatrix(data = relevel(knnfit_class_preds_2, ref = "Yes"), 
+                reference = relevel(Default_test$default, ref = "Yes"))  
+```
+
+
+#### ---------------------------------------------------------------------------
+### ROC curve
+
+```{r, fig.align='center', fig.width=4, fig.height=4}
+library(pROC)   # load library
+
+# create object for ROC curve for KNN fit
+
+roc_object_knn <- roc(response = ____________________, predictor = ____________________)
+
+# plot ROC curve
+
+plot(roc_object_knn, col = "red")
+```
+
+
+```{r}
+# obtain AUC's
+
+auc(roc_object_knn)
+```
+
+#### ---------------------------------------------------------------------------

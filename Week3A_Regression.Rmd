@@ -1,0 +1,147 @@
+---
+title: "Week 3 Codes - Linear Regression and KNN"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+```
+
+#### ---------------------------------------------------------------------------
+### Linear Regression
+
+```{r}
+ames <- readRDS("AmesHousing.rds")   # read in the dataset after specifying directory
+```
+
+
+```{r}
+modelfit <- lm(Sale_Price ~ Gr_Liv_Area + Year_Built, data = ames)   # fit the model
+
+summary(modelfit)   # produce result summaries of the model
+```
+
+
+```{r}
+predict(modelfit, newdata = data.frame(Gr_Liv_Area = 1000, Year_Built = 1990))   # obtain prediction
+```
+
+
+#### ---------------------------------------------------------------------------
+### Linear Regression: PRACTICE
+
+```{r}
+advertising <- readRDS("Advertising.rds")   # read in the dataset after specifying directory
+```
+
+
+```{r}
+fit1 <- lm(formula = sales ~ TV, data = advertising)   # fit the model
+
+summary(fit1)   # produce result summaries of the model
+
+sum(fit1$residuals^2)    # RSS
+# p = 1, Rsq = .6119,Adj Rsq =.6099, RSS = 2102.531, RSE = 3.259
+# this fit is underfit because the RSS is lowest and there is room for improvement
+```
+
+
+```{r}
+fit2 <- lm(formula = sales ~ TV + radio, data = advertising)   # fit the model
+
+summary(fit2)   # produce result summaries of the model
+
+sum(fit2$residuals^2)    # RSS
+#p = 2, Rsq = .8972, Adj Rsq = .8962, RSS = 556.914, RSE = 1.681 
+#RSS and RSE are both low comparetively 
+```
+
+
+```{r}
+fit3 <- lm(formula = sales ~ TV + radio + newspaper, data = advertising)   # fit the model
+
+summary(fit3)   # produce result summaries of the model
+
+sum(fit3$residuals^2)    # RSS
+#p = 2, Rsq = .8972, Adj Rsq = .8956, RSS = 556.8253, RSE = 1.686
+#RSE is rising and Adj Rsq is lowering meaning that this model is overfit because RSE and Adj Rsq are going the wrong way. Model is too complex.
+```
+
+
+```{r}
+round(cor(advertising), 3)   # obtain correlation matrix
+```
+
+
+#### ---------------------------------------------------------------------------
+### KNN Regression (one predictor)
+
+```{r, message=FALSE}
+library(caret)   # load the caret package
+
+knnfit1 <- knnreg(formula = Sale_Price ~ Gr_Liv_Area, data = ames, k = 1)   # 1-nn regression
+
+knnfit5 <- knnreg(formula = Sale_Price ~ Gr_Liv_Area, data = ames, k = 5)  # 5-nn regression
+```
+
+
+```{r}
+nearest_neighbors <- ames %>% 
+  select(Sale_Price, Gr_Liv_Area) %>%
+  mutate(distance = sqrt((1008-Gr_Liv_Area)^2)) %>%   # calculate distance
+  arrange(distance)   # sort by increasing distance
+```
+
+
+```{r}
+predict(object = knnfit1, newdata = data.frame(Gr_Liv_Area = 1008))  # 1-nn prediction
+```
+
+
+```{r}
+predict(object = knnfit5, newdata = data.frame(Gr_Liv_Area = 1008))  # 5-nn prediction
+```
+
+
+#### ---------------------------------------------------------------------------
+### KNN Regression (one predictor): PRACTICE
+
+
+```{r}
+knnfit10 <- knnreg(formula = Sale_Price ~ Gr_Liv_Area, data = ames, k = 7)   # 10-nn regression
+
+predict(object = knnfit10, newdata = data.frame(Gr_Liv_Area= 1008))  # 10-nn prediction
+```
+
+
+#### ---------------------------------------------------------------------------
+### KNN Regression (multiple predictors)
+
+```{r}
+# scale original predictors
+
+ames_scaled <- ames %>% 
+  select(Sale_Price, Gr_Liv_Area, Year_Built) %>%    # select required predictors
+  mutate(Gr_Liv_Area_scaled = scale(Gr_Liv_Area),
+         Year_Built_scaled = scale(Year_Built))   # scale predictors
+
+head(ames_scaled)   # shows first six observations
+```
+
+
+```{r}
+knnfit10 <- knnreg(formula = Sale_Price ~ Gr_Liv_Area_scaled + Year_Built_scaled, data = ames_scaled, k = 10)   # 10-nn regression
+```
+
+
+```{r}
+# obtain 10-nn prediction
+
+predict(object = knnfit10, newdata = data.frame(Gr_Liv_Area_scaled = (1000 - mean(ames$Gr_Liv_Area, na.rm = TRUE))/sd(ames$Gr_Liv_Area, na.rm = TRUE),
+                                     Year_Built_scaled = (1990 - mean(ames$Year_Built))/sd(ames$Year_Built)))
+```
+
+
+#### ---------------------------------------------------------------------------

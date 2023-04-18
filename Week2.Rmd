@@ -1,0 +1,133 @@
+---
+title: "Week 2 Codes - Linear Regression and KNN"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+```
+
+#### ---------------------------------------------------------------------------
+### Linear Regression
+
+```{r}
+ames <- readRDS("AmesHousing.rds")   # read in the dataset after specifying directory
+```
+
+
+```{r}
+modelfit <- lm(formula = Sale_Price ~ Gr_Liv_Area + Year_Built, data = ames)   # fit the model
+
+summary(modelfit)   # produce result summaries of the model
+```
+
+
+```{r}
+predict(object = modelfit, newdata = data.frame(Gr_Liv_Area = 1000, Year_Built= 1990))   # obtain prediction
+```
+
+
+#### ---------------------------------------------------------------------------
+### Linear Regression: PRACTICE
+
+```{r}
+advertising <- readRDS("Advertising.rds")   # read in the dataset after specifying directory
+```
+
+
+```{r}
+fit1 <- lm(formula = ____________________, data = __________)   # fit the model
+
+summary(__________)   # produce result summaries of the model
+
+sum(fit1$residuals^2)    # RSS
+```
+
+
+```{r}
+fit2 <- lm(formula = ____________________, data = __________)   # fit the model
+
+summary(__________)   # produce result summaries of the model
+
+sum(fit2$residuals^2)    # RSS
+```
+
+
+```{r}
+fit3 <- lm(formula = ____________________, data = __________)   # fit the model
+
+summary(__________)   # produce result summaries of the model
+
+sum(fit3$residuals^2)    # RSS
+```
+
+
+```{r}
+round(cor(advertising), 3)   # obtain correlation matrix
+```
+
+
+#### ---------------------------------------------------------------------------
+### KNN Regression (one predictor)
+
+```{r, message=FALSE}
+library(caret)   # load the caret package
+
+knnfit1 <- knnreg(formula = ____________________, data = __________, k = __________)   # 1-nn regression
+
+knnfit5 <- knnreg(formula = ____________________, data = __________, k = __________)  # 5-nn regression
+```
+
+
+```{r}
+nearest_neighbors = ames %>% 
+  select(Sale_Price, Gr_Liv_Area) %>%
+  mutate(distance = sqrt((1008-Gr_Liv_Area)^2)) %>%   # calculate distance
+  arrange(distance)   # sort by increasing distance
+
+predict(object = __________, newdata = __________)  # 1-nn prediction
+
+predict(object = __________, newdata = __________)  # 5-nn prediction
+```
+
+
+#### ---------------------------------------------------------------------------
+### KNN Regression (one predictor): PRACTICE
+
+
+```{r}
+knnfit10 <- knnreg(formula = ____________________, data = __________, k = __________)   # 10-nn regression
+
+predict(object = __________, newdata = __________)  # 10-nn prediction
+```
+
+
+#### ---------------------------------------------------------------------------
+### KNN Regression (multiple predictors)
+
+```{r}
+# scale original predictors
+
+ames_scaled <- ames %>% 
+  select(Sale_Price, Gr_Liv_Area, Year_Built) %>%    # select required predictors
+  mutate(Gr_Liv_Area_scaled = scale(Gr_Liv_Area),
+         Year_Built_scaled = scale(Year_Built))   # scale predictors
+```
+
+
+```{r}
+knnfit10 <- knnreg(formula = ____________________, data = __________, k = __________)   # 10-nn regression
+```
+
+
+```{r}
+# obtain 10-nn prediction
+
+predict(object = knnfit10, newdata = data.frame(Gr_Liv_Area_scaled = (1000 - mean(ames$Gr_Liv_Area, na.rm = TRUE))/sd(ames$Gr_Liv_Area, na.rm = TRUE),
+                                     Year_Built_scaled = (1990 - mean(ames$Year_Built))/sd(ames$Year_Built)))
+```
+
+
+#### ---------------------------------------------------------------------------

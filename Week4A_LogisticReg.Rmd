@@ -1,0 +1,131 @@
+---
+title: "Week 4 Codes - Logistic Regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+```
+
+#### ---------------------------------------------------------------------------
+### Load dataset
+
+```{r, message=FALSE}
+library(ISLR2)   # load library
+
+data("Default")   # load dataset
+```
+
+```{r}
+head(Default)   # print first six observations
+```
+
+```{r, message=FALSE}
+table(Default$default)   # class frequencies
+```
+
+
+#### ---------------------------------------------------------------------------
+### Split data
+
+```{r, message = FALSE}
+set.seed(041323)  # fix the random number generator for reproducibility
+
+library(caret) # load library
+
+train_index <- createDataPartition(y = Default$default, p = .7, list = FALSE) # split available data into 70% training and 30% test datasets
+
+Default_train <- Default[train_index,]   # training data, use this dataset to build model
+
+Default_test <- Default[-train_index,]   # test data, use this dataset to evaluate model's performance
+```
+
+
+#### ---------------------------------------------------------------------------
+### Logistic Regression
+
+```{r, message=FALSE}
+logregfit <- glm(formula = default ~ balance, data = Default_train, family = binomial)   # fit logistic regression model
+
+summary(logregfit)   # obtain results
+#intercept ^Bo = -10.46
+# ^B1 = 0.0053
+```
+
+
+```{r}
+predict(object = logregfit, newdata = data.frame(balance = 700))   # obtain individual log-odds predictions. // log(p(x)/(1-p(x)))
+```
+
+
+```{r}
+predict(object = logregfit, newdata = data.frame(balance = 700), type = "response")   # obtain individual probability predictions // get the probability
+```
+
+
+```{r}
+logreg_prob_preds <- predict(object = logregfit, newdata = Default_test, type = "response")   # obtain probability predictions on test set
+```
+
+
+```{r}
+threshold <- 0.5   # set threshold
+
+logreg_class_preds <- factor(ifelse(logreg_prob_preds > threshold, "Yes", "No"))   # obtain class predictions // if probability is greater than .5 (threshold) assign Yes
+```
+
+
+```{r}
+# create confusion matrix
+
+# use the following code only when all predictions are from the same class
+# levels(logreg_class_preds) = c("No", "Yes")
+# ref is the class label we are interested in
+
+confusionMatrix(data = relevel(logreg_class_preds, ref = "Yes"), 
+                reference = relevel(Default_test$default, ref = "Yes"))
+```
+
+
+```{r, fig.align='center', fig.width=4, fig.height=4}
+# ROC curve
+
+library(pROC)   # load library
+
+# create object for ROC curve 
+roc_object <- roc(response = __________, predictor = __________)
+
+# plot ROC curve
+plot(roc_object, col = "red")
+```
+
+
+```{r}
+# obtain AUC
+auc(roc_object)
+```
+
+
+#### ---------------------------------------------------------------------------
+### Logistic Regression: PRACTICE
+
+```{r, message=FALSE}
+# logistic regression model with 'student'
+
+fit1 <- glm(formula = default ~ student, data = Default_train, family = binomial)
+
+summary(fit1)
+```
+
+
+```{r, message=FALSE}
+# logistic regression model with 'balance' and 'student' 
+
+fit2 <- glm(formula = default ~ student + balance, data = Default_train, family = binomial)
+
+summary(fit2) 
+```
+
+#### ---------------------------------------------------------------------------

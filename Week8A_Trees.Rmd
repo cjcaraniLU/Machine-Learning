@@ -1,0 +1,382 @@
+---
+title: "Week 8 Codes - Classification and Regression Trees (CART)"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+library(caret)
+library(recipes)
+```
+
+#### ---------------------------------------------------------------------------
+### Regression Tree: Ames Housing Dataset
+
+```{r}
+ames <- readRDS("AmesHousing.rds")   # load dataset
+```
+
+```{r}
+# reorder levels of 'Overall_Qual'
+ames$Overall_Qual <- factor(ames$Overall_Qual, levels = c("Very_Poor", "Poor", "Fair", "Below_Average", 
+                                                          "Average", "Above_Average", "Good", "Very_Good", 
+                                                          "Excellent", "Very_Excellent"))
+```
+
+
+```{r}
+# split data
+
+set.seed(051623)   # set seed
+
+index <- createDataPartition(y = ames$Sale_Price, p = 0.7, list = FALSE)   # consider 70-30 split
+
+ames_train <- ames[index,]   # training data
+
+ames_test <- ames[-index,]   # test data
+```
+
+
+```{r}
+# create recipe and blueprint, prepare and apply blueprint
+
+set.seed(051623)   # set seed
+
+ames_recipe <- recipe(Sale_Price ~ ., data = ames_train)   # set up recipe
+
+blueprint <- ames_recipe %>%    
+  step_nzv(Street, Utilities, Pool_Area, Screen_Porch, Misc_Val) %>%   # filter out zv/nzv predictors
+  step_impute_mean(Gr_Liv_Area) %>%                                    # impute missing entries
+  step_integer(Overall_Qual) %>%                                       # numeric conversion of levels of the predictors   
+  step_center(all_numeric(), -all_outcomes()) %>%                      # center (subtract mean) all numeric predictors
+  step_scale(all_numeric(), -all_outcomes()) %>%                       # scale (divide by standard deviation) all numeric predictors
+  step_other(Neighborhood, threshold = 0.01, other = "other") %>%      # lumping required predictors
+  step_dummy(all_nominal(), one_hot = FALSE)                           # one-hot/dummy encode nominal categorical predictors
+
+
+prepare <- prep(blueprint, data = ames_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train <- bake(prepare, new_data = ames_train)   # apply the blueprint to training data
+
+baked_test <- bake(prepare, new_data = ames_test)    # apply the blueprint to test data
+```
+
+
+```{r}
+# implement CV to tune hyperparameter
+
+set.seed(051623)   # set seed
+
+cv_specs <- trainControl(method = "repeatedcv", number = 5, repeats = 5)   # CV specifications
+
+
+library(rpart)   # for trees
+
+tree_cv <- train(blueprint,
+                 data = ames_train,
+                 method = "rpart",  
+                 trControl = cv_specs,
+                 tuneLength = 20,                   # considers a grid of 20 possible tuning parameter values # r will choose the values
+                 metric = "RMSE")
+```
+
+
+```{r}
+tree_cv$bestTune    # optimal hyperparameter
+```
+
+
+```{r}
+min(tree_cv$results$RMSE)   # optimal CV RMSE
+```
+
+
+```{r}
+# build optimal final model
+
+final_model <- rpart(formula = Sale_Price ~ ., 
+                     data = baked_train,                      
+                     cp = tree_cv$bestTune$cp,   
+                     xval = 0,                # no further CV
+                     method = "anova")     # for regression trees (anova) # for classification tree (class)
+```
+
+
+```{r}
+# obtain predictions and test set RMSE
+
+final_model_preds <- predict(object = final_model, newdata = baked_test, type = "vector")    # obtain predictions
+
+sqrt(mean((final_model_preds - baked_test$Sale_Price)^2))   # calculate test set RMSE
+```
+
+
+```{r}
+summary(final_model)    
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+library(rpart.plot)
+
+rpart.plot(final_model)    
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# variable importance
+
+vip(object = tree_cv, num_features = 20, method = "model")          
+```
+
+
+#### ---------------------------------------------------------------------------
+### Regression Tree (no pruning): Ames Housing Dataset
+
+```{r}
+# build optimal final model
+
+final_model_no_prune <- rpart(formula = Sale_Price ~. , 
+                              data = baked_train,                      
+                              cp = 0,                  # no pruning
+                              xval = 0,                # no CV
+                              method = "anova")     # for regression trees
+```
+
+
+```{r}
+# obtain predictions and test set RMSE
+
+final_model_no_prune_preds <- predict(object = final_model_no_prune, newdata = baked_test, type = "vector")    # obtain predictions
+
+sqrt(mean((final_model_no_prune_preds - baked_test$Sale_Price)^2))   # calculate test set RMSE
+```
+
+
+```{r}
+summary(final_model_no_prune)    
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+rpart.plot(final_model_no_prune)    
+```
+
+
+#### ---------------------------------------------------------------------------
+### Regression Tree (minimal feature engineering): Ames Housing Dataset
+
+```{r}
+# create new blueprint (minimal feature engineering), prepare and apply blueprint
+
+set.seed(051623)   # set seed
+
+ames_recipe <- recipe(Sale_Price ~ ., data = ames_train)   # set up recipe
+
+blueprint_new <- ames_recipe %>%    
+  step_impute_mean(Gr_Liv_Area)       # impute missing entries                     
+
+
+prepare_new <- prep(blueprint_new, data = ames_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train_new <- bake(prepare_new, new_data = ames_train)   # apply the blueprint to training data
+
+baked_test_new <- bake(prepare_new, new_data = ames_test)    # apply the blueprint to test data
+```
+
+
+```{r}
+# implement CV to tune hyperparameters
+
+set.seed(051623)   # set seed
+
+cv_specs <- trainControl(method = "repeatedcv", number = 5, repeats = 5)   # CV specifications
+
+
+library(rpart)
+
+tree_cv_min_fe <- train(blueprint_new,
+                        data = ames_train,
+                        method = "rpart",  
+                        trControl = cv_specs,
+                        tuneLength = 20,                   # considers a grid of 20 possible tuning parameter values
+                        metric = "RMSE")
+```
+
+
+```{r}
+tree_cv_min_fe$bestTune    # optimal hyperparameters
+```
+
+
+```{r}
+min(tree_cv_min_fe$results$RMSE)   # optimal CV RMSE
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# variable importance
+
+vip(object = tree_cv_min_fe, num_features = 20, method = "model")          
+```
+
+
+#### ---------------------------------------------------------------------------
+### Classification Tree: Iris Dataset (Practice)
+
+```{r, message=FALSE}
+data(iris)        # load dataset
+```
+
+
+```{r}
+# investigate the dataset
+summary(iris)
+sum(is.na(iris))
+nearZeroVar(iris)
+
+
+```
+
+
+```{r}
+# split the dataset
+
+set.seed(051623)   # set seed
+
+index <- createDataPartition(y = iris$Species, p = .75, list = FALSE)   
+
+iris_train <- iris[index,]   # training data
+
+iris_test <- iris[-index,]   # test data
+```
+
+
+```{r}
+# create recipe and blueprint, prepare, and bake
+
+set.seed(051623)   # set seed
+
+iris_recipe <- recipe(formula = Species ~ ., data = iris_train)   # sets up the type and role of variables
+
+
+blueprint <- iris_recipe %>%  
+  step_center(all_numeric(), -all_outcomes()) %>%                      # center (subtract mean) all numeric predictors
+  step_scale(all_numeric(), -all_outcomes())                       # scale (divide by standard deviation) all numeric predictors
+
+
+prepare <- prep(blueprint, data = iris_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train <- bake(prepare, new_data = iris_train)   # apply the blueprint to training data
+
+baked_test <- bake(prepare, new_data = iris_test)    # apply the blueprint to test data
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# set up CV 
+
+set.seed(051623)   # set seed
+
+cv_specs <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
+```
+
+
+```{r}
+set.seed(051623)   # set seed
+
+# CV with logistic regression
+# unable to compute this because our y is multi-classed 
+# logistic_cv <- train(blueprint,
+#                      data = iris_train, 
+#                      method = "glm",
+#                      family = binomial,
+#                      trControl = cv_specs,
+#                      metric = "Accuracy")
+```
+
+```{r}
+set.seed(051623)   # set seed
+
+# CV with KNN
+k_grid <- expand.grid(k = seq(1, 101, by = 10))   # grid of K
+
+knn_cv <- train(blueprint,
+                data = iris_train, 
+                method = "knn",
+                trControl = cv_specs,
+                tuneGrid = k_grid,
+                metric = "Accuracy")
+
+
+# CV with tree
+tree_cv <- train(blueprint,   
+                 data = iris_train,
+                 method = "rpart",
+                 trControl = cv_specs,
+                 tuneLength = 20,
+                 metric = "Accuracy")
+```
+
+```{r}
+# create new blueprint (minimal feature engineering), prepare and apply blueprint
+
+set.seed(051623)   # set seed
+
+blueprint_new <- iris_recipe 
+
+
+prepare_new <- prep(blueprint_new, data = iris_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train_new <- bake(prepare_new, new_data = iris_train)   # apply the blueprint to training data
+
+baked_test_new <- bake(prepare_new, new_data = iris_test)    # apply the blueprint to test data
+
+
+
+# CV with tree (minimal feature engineering)
+tree_cv_min_fe <- train(blueprint_new,   
+                        data = iris_train,
+                        method = "rpart",
+                        trControl = cv_specs,
+                        tuneLength = 20,
+                        metric = "Accuracy")
+```
+
+
+
+```{r}
+# report the optimal CV Accuracy and the optimal hyperparameter for each model
+tree_cv$bestTune    # optimal hyperparameter
+max(tree_cv$results$Accuracy)   # optimal CV RMSE
+
+knn_cv$bestTune
+max(knn_cv$results$Accuracy)
+
+tree_cv_min_fe$bestTune
+max(tree_cv_min_fe$results$Accuracy)
+
+```
+
+
+```{r}
+# fit the final optimal model, obtain test set predictions, create confusion matrix, and obtain the test set Accuracy
+
+
+
+
+
+
+
+
+```
+
+
+
+#### ---------------------------------------------------------------------------

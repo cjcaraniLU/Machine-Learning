@@ -1,0 +1,321 @@
+---
+title: "Week 8 Codes - Ensemble Methods"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+library(caret)
+library(recipes)
+library(rpart)
+library(rpart.plot)
+```
+
+
+#### ---------------------------------------------------------------------------
+### Bagging: Ames Housing Dataset
+
+```{r}
+ames <- readRDS("AmesHousing.rds")   # load dataset
+```
+
+```{r}
+# reorder levels of 'Overall_Qual'
+ames$Overall_Qual <- factor(ames$Overall_Qual, levels = c("Very_Poor", "Poor", "Fair", "Below_Average", 
+                                                          "Average", "Above_Average", "Good", "Very_Good", 
+                                                          "Excellent", "Very_Excellent"))
+```
+
+
+```{r}
+# split data
+
+set.seed(051823)   # set seed
+
+train_index <- createDataPartition(y = ames$Sale_Price, p = 0.7, list = FALSE)   # consider 70-30 split
+
+ames_train <- ames[train_index,]   # training data
+
+ames_test <- ames[-train_index,]   # test data
+```
+
+
+```{r}
+# create recipe and blueprint, prepare and apply blueprint
+
+set.seed(051823)   # set seed
+
+ames_recipe <- recipe(Sale_Price ~ ., data = ames_train)   # set up recipe
+
+blueprint <- ames_recipe %>%    
+  step_nzv(Street, Utilities, Pool_Area, Screen_Porch, Misc_Val) %>%   # filter out zv/nzv predictors
+  step_impute_mean(Gr_Liv_Area) %>%                                    # impute missing entries
+  step_integer(Overall_Qual) %>%                                       # numeric conversion of levels of the predictors   
+  step_center(all_numeric(), -all_outcomes()) %>%                      # center (subtract mean) all numeric predictors
+  step_scale(all_numeric(), -all_outcomes()) %>%                       # scale (divide by standard deviation) all numeric predictors
+  step_other(Neighborhood, threshold = 0.01, other = "other") %>%      # lumping required predictors
+  step_dummy(all_nominal(), one_hot = FALSE)                           # one-hot/dummy encode nominal categorical predictors
+
+
+prepare <- prep(blueprint, data = ames_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train <- bake(prepare, new_data = ames_train)   # apply the blueprint to training data
+
+baked_test <- bake(prepare, new_data = ames_test)    # apply the blueprint to test data
+```
+
+
+```{r}
+set.seed(051823)   # set seed
+
+library(ipred)   # for bagging
+
+bag_fit <- bagging(formula = Sale_Price ~., 
+                   data = baked_train,
+                   nbagg = 500,                             # number of trees to grow (bootstrap samples) usually 500
+                   coob = TRUE,                             # yes to computing OOB error estimate
+                   control = rpart.control(minsplit = 2,    # split a node if at least 2 observations present # very low tree (low bias, high variance[bagging takes care of variance])
+                                           cp = 0,          # no pruning (let the trees grow tall)
+                                           xval = 0))       # no CV 
+```
+
+
+```{r}
+bag_fit   # results of bagging 
+```
+
+
+```{r}
+bag_fit$err   # OOB RMSE estimate
+```
+
+
+```{r}
+# obtain predictions on the test set
+
+final_model_preds <- predict(object = bag_fit, newdata = baked_test)     # use 'type = "class"' for classification trees
+
+sqrt(mean((final_model_preds - baked_test$Sale_Price)^2))   # test set RMSE
+```
+
+
+```{r}
+# variable importance
+
+imp <- varImp(bag_fit)      # look at the object created
+```
+
+
+
+
+#### ---------------------------------------------------------------------------
+### Random Forests: Ames Housing Dataset
+
+```{r}
+# CV with random forests
+
+set.seed(051823)   # set seed
+
+cv_specs <- trainControl(method = "cv", number = 5)   # CV specifications
+
+
+library(ranger)
+library(e1071)
+
+#mtry is m in the slides
+
+param_grid <- expand.grid(mtry = seq(1, 30, 1),     # sequence of 1 to at least half the number of predictors
+                          splitrule ="variance",   # use "gini" for classification use "varaince" for regression
+                          min.node.size = 2)        # for each tree
+
+
+rf_cv <- train(blueprint,
+               data = ames_train,
+               method = "ranger",
+               trControl = cv_specs,
+               tuneGrid = param_grid,
+               metric = "RMSE")
+```
+
+
+```{r}
+rf_cv$bestTune$mtry   # optimal tuning parameter
+```
+
+
+```{r}
+min(rf_cv$results$RMSE)   # optimal CV RMSE
+```
+
+
+```{r}
+# fit final model
+
+final_model <- ranger(formula = Sale_Price~.,
+                      data = baked_train,
+                      num.trees = 500,
+                      mtry = rf_cv$bestTune$mtry,
+                      splitrule = "variance",
+                      min.node.size = 2, 
+                      importance = "impurity")
+```
+
+
+```{r}
+# obtain predictions on the test set
+
+final_model_preds <- predict(object = final_model, data = baked_test, type = "response")  # predictions on test set
+
+sqrt(mean((final_model_preds$predictions - baked_test$Sale_Price)^2))  # test set RMSE
+```
+
+
+```{r}
+# variable importance
+
+head(sort(final_model$variable.importance, decreasing = TRUE), 10)      # top 10 most important features
+```
+
+
+
+
+#### ---------------------------------------------------------------------------
+### Practice Problem: Vowels Dataset
+
+
+```{r, message=FALSE}
+vowels <- readRDS("vowels.rds")     # load dataset
+```
+
+
+```{r}
+# investigate the dataset
+
+
+summary(vowels)
+sum(is.na(vowels))
+
+```
+
+
+```{r}
+# split the dataset
+
+set.seed(051823)   # set seed
+
+index <- createDataPartition(y = vowels$letter, p = .7, list = FALSE)   
+
+vowels_train <- vowels[index,]   # training data
+
+vowels_test <- vowels[index,]   # test data
+```
+
+
+```{r}
+# create recipe and blueprint, prepare, and bake
+
+set.seed(051823)   # set seed
+
+vowels_recipe <- recipe(formula = letter ~., data = vowels_train)   # sets up the type and role of variables
+
+
+blueprint <- vowels_recipe %>%  
+  step_center(all_numeric(), -all_outcomes()) %>%                      # center (subtract mean) all numeric predictors
+  step_scale(all_numeric(), -all_outcomes())                       # scale (divide by standard deviation) all numeric predictors
+
+
+prepare <- prep(blueprint, data = vowels_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train <- bake(prepare, new_data = vowels_train)   # apply the blueprint to training data
+
+baked_test <- bake(prepare, new_data = vowels_test)    # apply the blueprint to test data
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# set up CV 
+
+set.seed(051823)   # set seed
+
+cv_specs <- trainControl(method = "repeatedcv", number = 5, repeats = 5)
+```
+
+
+```{r}
+set.seed(051823)   # set seed
+
+
+# CV with KNN
+k_grid <- expand.grid(k = seq(1, 101, by = 10))   # grid of K
+
+knn_cv <- train(blueprint,
+                data = baked_train, 
+                method = "knn",
+                trControl = cv_specs,
+                tuneGrid = k_grid,
+                metric = "Accuracy")
+
+
+# CV with classification tree
+tree_cv <- train(blueprint,   
+                 data = baked_train,
+                 method = "rpart",
+                 trControl = cv_specs,
+                 tuneLength = 20,
+                 metric = "Accuracy")
+
+
+# bagging
+bag_fit <- bagging(formula = letter~., 
+                   data = baked_train,
+                   nbagg = 500,   
+                   coob = TRUE,   
+                   control = rpart.control(minsplit = 2,    
+                                           cp = 0,    
+                                           xval = 0))  
+
+
+# CV with random forests
+param_grid <- expand.grid(mtry = seq(1, 30, 1),     
+                          splitrule = "variance",   
+                          min.node.size = 2)        
+
+rf_cv <- train(blueprint,
+               data = vowels_train,
+               method = "ranger",
+               trControl = cv_specs,
+               tuneGrid = param_grid,
+               metric = "Accuracy")
+```
+
+
+```{r}
+# report the optimal CV (or, OOB) Accuracy and the optimal hyperparameters for each model
+knn$max$Accuracy
+
+max(tree_cv$results$Accuracy)
+
+bag_fit #1 - out of bag misclassification 1-0.0265
+
+
+```
+
+
+```{r}
+# fit the final optimal model, obtain test set predictions, create confusion matrix, and obtain the test set Accuracy
+
+
+
+
+
+
+
+
+```
+
+
+#### ---------------------------------------------------------------------------

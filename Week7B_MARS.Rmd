@@ -1,0 +1,388 @@
+---
+title: "Week 7 Codes - Multivariate Adaptive Regression Splines (MARS) "
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+library(caret)
+library(recipes)
+library(pROC)
+```
+
+#### ---------------------------------------------------------------------------
+### MARS: Ames Housing Dataset
+
+
+```{r, message=FALSE}
+ames <- readRDS("AmesHousing.rds")   # load dataset
+```
+
+
+```{r}
+# reorder levels of 'Overall_Qual'
+ames$Overall_Qual <- factor(ames$Overall_Qual, levels = c("Very_Poor", "Poor", "Fair", "Below_Average", 
+                                                          "Average", "Above_Average", "Good", "Very_Good", 
+                                                          "Excellent", "Very_Excellent"))
+```
+
+
+```{r}
+# split data
+
+set.seed(051123)   # set seed
+
+train_index <- createDataPartition(y = ames$Sale_Price, p = 0.7, list = FALSE)   # consider 70-30 split
+
+ames_train <- ames[train_index,]   # training data
+
+ames_test <- ames[-train_index,]   # test data
+```
+
+
+```{r}
+# create recipe and blueprint, prepare and apply blueprint
+
+set.seed(051123)   # set seed
+
+ames_recipe <- recipe(Sale_Price ~ ., data = ames_train)   # set up recipe
+
+blueprint <- ames_recipe %>%    
+  step_nzv(Street, Utilities, Pool_Area, Screen_Porch, Misc_Val) %>%   # filter out zv/nzv predictors
+  step_impute_mean(Gr_Liv_Area) %>%                                    # impute missing entries
+  step_integer(Overall_Qual) %>%                                       # numeric conversion of levels of the predictors   
+  step_center(all_numeric(), -all_outcomes()) %>%                      # center (subtract mean) all numeric predictors
+  step_scale(all_numeric(), -all_outcomes()) %>%                       # scale (divide by standard deviation) all numeric predictors
+  step_other(Neighborhood, threshold = 0.01, other = "other") %>%      # lumping required predictors
+  step_dummy(all_nominal(), one_hot = FALSE)                           # one-hot/dummy encode nominal categorical predictors
+
+
+prepare <- prep(blueprint, data = ames_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train <- bake(prepare, new_data = ames_train)   # apply the blueprint to training data
+
+baked_test <- bake(prepare, new_data = ames_test)    # apply the blueprint to test data
+```
+
+
+```{r}
+# implement CV to tune hyperparameters
+
+set.seed(051123)   # set seed
+
+cv_specs <- trainControl(method = "repeatedcv", number = 5, repeats = 5)   # CV specifications
+
+
+param_grid <- expand.grid(degree = 1:3, nprune = seq(1, 100, length.out = 10))    # grid of tuning parameters
+
+
+library(earth)   # package for implementing MARS
+
+mars_cv <- train(blueprint,
+                 data = ames_train,
+                 method = "earth",   # for MARS
+                 trControl = cv_specs,
+                 tuneGrid = param_grid,  
+                 metric = "RMSE")
+```
+
+
+```{r}
+mars_cv$bestTune    # optimal hyperparameters
+```
+
+
+```{r}
+min(mars_cv$results$RMSE)   # optimal CV RMSE
+```
+
+
+```{r}
+# build optimal final model
+
+final_model <- earth(formula = Sale_Price ~ ., 
+                     data = baked_train,                      
+                     degree = mars_cv$bestTune$degree,   
+                     nprune = mars_cv$bestTune$nprune)     
+```
+
+
+```{r}
+# obtain predictions and test set RMSE
+
+final_model_preds <- predict(object = final_model, newdata = baked_test, type = "response")    # obtain predictions
+
+sqrt(mean((final_model_preds - baked_test$Sale_Price)^2))   # calculate test set RMSE
+```
+
+
+```{r}
+summary(final_model)    
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# variable importance
+
+vip(object = mars_cv, num_features = 20, method = "model")          
+```
+
+
+
+
+
+#### ---------------------------------------------------------------------------
+### MARS (minimal feature engineering): Ames Housing Dataset
+
+
+```{r}
+# create new blueprint (minimal feature engineering), prepare and apply blueprint
+
+set.seed(051123)   # set seed
+
+blueprint_new <- ames_recipe %>%    
+  step_impute_mean(Gr_Liv_Area)       # impute missing entries                     
+
+
+prepare_new <- prep(blueprint_new, data = ames_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train_new <- bake(prepare_new, new_data = ames_train)   # apply the blueprint to training data
+
+baked_test_new <- bake(prepare_new, new_data = ames_test)    # apply the blueprint to test data
+```
+
+
+```{r}
+# implement CV to tune hyperparameters
+
+set.seed(051123)   # set seed
+
+cv_specs <- trainControl(method = "repeatedcv", number = 5, repeats = 5)   # CV specifications
+
+param_grid <- expand.grid(degree = 1:3, nprune = seq(1, 100, length.out = 10))    # grid of tuning parameters
+
+mars_cv_new <- train(blueprint_new,
+                     data = ames_train,
+                     method = "earth",   # for MARS
+                     trControl = cv_specs,
+                     tuneGrid = param_grid,  
+                     metric = "RMSE")
+```
+
+
+```{r}
+mars_cv_new$bestTune    # optimal hyperparameters
+```
+
+
+```{r}
+min(mars_cv_new$results$RMSE)   # optimal CV RMSE
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# variable importance
+
+vip(object = mars_cv_new, num_features = 20, method = "model")          
+```
+
+
+
+
+
+#### ---------------------------------------------------------------------------
+### MARS: Titanic Dataset (Practice)
+
+
+```{r, message=FALSE}
+titanic <- readRDS("titanic.rds")   # load dataset
+```
+
+
+```{r}
+# investigate the dataset
+
+summary(titanic)
+nearZeroVar(titanic_train, saveMetrics = TRUE)
+sum(is.na(titanic))
+
+```
+
+
+```{r}
+# split the dataset
+
+set.seed(051123)   # set seed
+
+index <- createDataPartition(y = titanic$survived, p = .8, list = FALSE)   
+
+titanic_train <- titanic[index,]   # training data
+
+titanic_test <- titanic[-index,]   # test data
+```
+
+
+```{r}
+# create recipe and blueprint, prepare, and bake
+
+set.seed(051123)   # set seed
+
+titanic_recipe <- recipe(formula = survived ~ ., data = titanic_train)   # sets up the type and role of variables
+
+
+blueprint <- titanic_recipe %>%  
+  step_impute_mean(age) %>%                                    # impute missing entries
+  step_impute_median(parch) %>%                         # impute parch by median since discrete integers
+  step_integer(pclass) %>%                                       # numeric conversion of levels of the predictors   
+  step_normalize(all_numeric_predictors()) %>%                # center and scale numerical features
+  step_dummy(sex, one_hot = FALSE) # creating dummy variable for nominal feature
+
+
+prepare <- prep(blueprint, training = titanic_train) # prepare blueprint on training data
+baked_train <- bake(prepare, new_data = titanic_train) # apply the blueprint to training data
+baked_test <- bake(prepare, new_data = titanic_test) # apply the blueprint to training data
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# set up CV 
+
+set.seed(051123)   # set seed
+
+# CV specifications
+cv_specs <- trainControl(method = "repeatedcv",
+                         number = 5,
+                         repeats = 5)
+
+
+# CV with logistic regression
+logistic_cv <- train(blueprint,
+                     data = titanic_train, 
+                     method = "glm",
+                     family = "binomial",
+                     trControl = cv_specs,
+                     metric = "Accuracy")
+
+# CV with KNN
+k_grid <- expand.grid(k = seq(1, 101, by = 10))   # grid of K
+
+knn_cv <- train(blueprint,
+                data = titanic_train, 
+                method = "knn",
+                trControl = cv_specs,
+                tuneGrid = k_grid,
+                metric = "Accuracy")
+
+
+# CV with MARS
+param_grid <- expand.grid(degree = 1:3, nprune = seq(1, 100, length.out = 10))    # grid of tuning parameters
+
+mars_cv <- train(blueprint,
+                 data = titanic_train,
+                 method = "earth", 
+                 glm = list(family = binomial),   # for classification problems
+                 trControl = cv_specs,
+                 tuneGrid = param_grid,  
+                 metric = "Accuracy")
+```
+
+
+```{r}
+# create new blueprint (minimal feature engineering), prepare, and bake
+
+set.seed(051123)   # set seed
+
+blueprint_new <- titanic_recipe %>% 
+  step_impute_mean(age) %>% # impute age by mean
+  step_impute_median(parch) # impute parch by median since discrete integers
+
+
+prepare_new <- prep(blueprint_new, data = titanic_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train_new <- bake(prepare_new, new_data = titanic_train)   # apply the blueprint to training data
+
+baked_test_new <- bake(prepare_new, new_data = titanic_test)    # apply the blueprint to test data
+```
+
+
+```{r}
+# CV with MARS (minimal feature engineering)
+param_grid <- expand.grid(degree = 1:3, nprune = seq(1, 100, length.out = 10))    # grid of tuning parameters
+
+mars_cv_new <- train(blueprint_new,
+                     data = titanic_train,
+                     method = "earth",
+                     glm = list(family = binomial),   # for classification problems
+                     trControl = cv_specs,
+                     tuneGrid = param_grid,  
+                     metric = "Accuracy")
+```
+
+
+
+```{r}
+# report the optimal CV Accuracies and the optimal hyperparameters for each model
+
+logistic_cv$results$Accuracy # logistic regression
+
+max(knn_cv$results$Accuracy) # KNN
+
+max(mars_cv$results$Accuracy) # MARS
+
+max(mars_cv_new$results$Accuracy) # MARS (minimal feature preprocessing)
+
+knn_cv$bestTune$k # optimal K
+
+mars_cv$bestTune # optimal MARS hyperparameters
+
+mars_cv_new$bestTune # optimal MARS hyperparameters with minimal feature engineering
+
+
+
+```
+
+
+```{r}
+# fit the final optimal model, obtain test set predictions, create confusion matrix, and obtain the test set Accuracy
+
+final_model <- earth(survived ~ .,
+                      data = baked_train,
+                      degree = mars_cv$bestTune$degree, # optimal degree of interactions
+                      nprune = mars_cv$bestTune$nprune, # optimal number of terms after pruning
+                      glm = list(family = binomial)) # for classification
+
+final_model_prob_preds <- predict(final_model, newdata = baked_test, type = "response") # probability predictions
+final_model_class_preds <- predict(final_model, newdata = baked_test, type = "class") # class label predictions 49/50
+
+
+```
+
+
+#### ---------------------------------------------------------------------------
+### ROC curve
+
+```{r, fig.align='center', fig.width=4, fig.height=4}
+library(pROC)   # load library
+
+# create object for ROC curve
+
+roc_object <- roc(response = ____________________, predictor = ____________________)
+
+# plot ROC curve
+
+plot(roc_object, col = "red")
+```
+
+
+```{r}
+# obtain AUC's
+
+auc(roc_object)
+```
+
+#### ---------------------------------------------------------------------------

@@ -30,7 +30,7 @@ predict(modelfit, newdata = data.frame(Gr_Liv_Area = 1000, Year_Built = 1990))  
 
 
 #### ---------------------------------------------------------------------------
-### Linear Regression: PRACTICE
+### Linear Regression: PRACTICEWhich of the following methods require CV to tune respective hyperparameters
 
 ```{r}
 advertising <- readRDS("Advertising.rds")   # read in the dataset after specifying directory

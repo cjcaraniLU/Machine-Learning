@@ -1,0 +1,350 @@
+---
+title: "Week 9 Codes - Support Vector Machines"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+library(caret)
+library(recipes)
+```
+
+
+#### ---------------------------------------------------------------------------
+### Support Vector Classifier (soft margin classifier)
+
+```{r, message=FALSE}
+svcdata <- readRDS("svcdata.rds")   # load dataset
+```
+
+
+```{r}
+set.seed(052323)   # set seed
+
+library(kernlab)  
+
+# implement CV to find optimal C
+
+svc_cv <- train(y ~ ., 
+                data = svcdata,
+                method = "svmLinear",    # this can be found on the caret package documentation  
+                trControl = trainControl(method = "repeatedcv", number = 10, repeats = 5),
+                tuneLength = 20,
+                metric = "Accuracy")
+```
+
+```{r}
+svc_cv    # CV results
+```
+
+```{r}
+svc_cv$bestTune   # optimal C
+```
+
+
+```{r}
+# fit model with optimal C
+
+final_model_svc <- ksvm(y ~ .,
+                        data = svcdata,
+                        kernel = "vanilladot",  
+                        C = svc_cv$bestTune$C,                
+                        prob.model = TRUE)       # needed to obtain predicted probabilities
+```
+
+```{r}
+final_model_svc     # final model results
+```
+
+```{r}
+alphaindex(final_model_svc)           # which observations are support vectors
+```
+
+
+
+#### ---------------------------------------------------------------------------
+### Support Vector Machine (Polynomial Kernel)
+
+```{r, message=FALSE}
+circle <- readRDS("circle.rds")   # load dataset
+```
+
+
+```{r}
+set.seed(052323)   # set seed
+
+# implement CV to find optimal hyperparameters
+
+param_grid_poly <- expand.grid(degree = c(1, 2, 3, 4),
+                               scale = c(0.5, 1, 2), 
+                               C = c(0.001, 0.1, 1, 10, 10))
+
+svm_poly_cv <- train(y ~ ., 
+                     data = circle,
+                     method = "svmPoly", 
+                     trControl = trainControl(method = "repeatedcv", number = 10, repeats = 5),
+                     tuneGrid = param_grid_poly,
+                     metric = "Accuracy")
+```
+
+```{r}
+svm_poly_cv$bestTune    # optimal hyperparameters
+```
+
+```{r}
+max(svm_poly_cv$results$Accuracy)    # optimal CV accuracy
+```
+
+
+```{r}
+# fit model with optimal parameters
+
+final_model_svm_poly <- ksvm(y ~ ., 
+                             data = circle,
+                             kernel = "polydot",
+                             kpar = list(degree = svm_poly_cv$bestTune$degree,
+                                         scale = svm_poly_cv$bestTune$scale,
+                                         offset = 1),
+                             C = svm_poly_cv$bestTune$C,
+                             prob.model = TRUE)
+```
+
+```{r}
+final_model_svm_poly   # final model results
+```
+
+```{r}
+alphaindex(final_model_svm_poly)           # which observations are support vectors
+```
+
+
+
+#### ---------------------------------------------------------------------------
+### Support Vector Machine (Radial Kernel)
+
+```{r, message=FALSE}
+spirals <- readRDS("spirals.rds")   # load dataset
+```
+
+
+```{r}
+set.seed(052323)   # set seed
+
+# implement CV to find optimal hyperparameters
+
+param_grid_radial <- expand.grid(sigma = c(0.5, 1, 1.5, 2),
+                                 C = c(0.001, 0.01, 1, 5, 10, 100))
+
+svm_radial_cv <- train(y ~ .,
+                       data = spirals,
+                       method = "svmRadial",
+                       tuneGrid = param_grid_radial,
+                       trControl = trainControl(method = "repeatedcv", number = 10, repeats = 5),
+                       metric = "Accuracy")
+```
+
+```{r}
+svm_radial_cv$bestTune    # optimal hyperparameters
+```
+
+```{r}
+max(svm_radial_cv$results$Accuracy)   # optimal CV accuracy
+```
+
+
+```{r}
+# fit model with optimal parameters
+
+final_model_svm_radial <- ksvm(y ~ ., 
+                               data = spirals, 
+                               kernel = "rbfdot",
+                               kpar = list(sigma = svm_radial_cv$bestTune$sigma),
+                               C = svm_radial_cv$bestTune$C, 
+                               prob.model = TRUE)
+```
+
+```{r}
+final_model_svm_radial   # final model results
+```
+
+```{r}
+alphaindex(final_model_svm_radial)           # which observations are support vectors
+```
+
+
+
+#### ---------------------------------------------------------------------------
+### Practice Problem: Sonar Dataset
+
+
+```{r, message=FALSE}
+library(mlbench)   # load library
+
+data(Sonar)     # load dataset
+```
+
+
+```{r}
+# investigate the dataset
+
+
+
+
+
+
+
+
+
+
+```
+
+
+```{r}
+# split the dataset
+
+set.seed(052323)   # set seed
+
+index <- createDataPartition(y = __________, p = __________, list = FALSE)   
+
+Sonar_train <- __________[__________,]   # training data
+
+Sonar_test <- __________[__________,]   # test data
+```
+
+
+```{r}
+# create recipe and blueprint, prepare, and bake
+
+set.seed(052323)   # set seed
+
+Sonar_recipe <- recipe(formula = __________, data = __________)   # sets up the type and role of variables
+
+
+blueprint <- Sonar_recipe %>%  ____________________________________________________________
+
+
+prepare <- prep(blueprint, data = Sonar_train)    # estimate feature engineering parameters based on training data
+
+
+baked_train <- bake(prepare, new_data = Sonar_train)   # apply the blueprint to training data
+
+baked_test <- bake(prepare, new_data = Sonar_test)    # apply the blueprint to test data
+```
+
+
+```{r, fig.align='center', fig.height=6, fig.width=8}
+# set up CV 
+
+set.seed(052323)   # set seed
+
+cv_specs <- ____________________________________________________________
+```
+
+
+```{r}
+set.seed(052323)   # set seed
+
+# CV with support vector classifier
+
+param_grid_linear <- expand.grid(C = c(0.001, 0.1, 1, 5, 10, 100))
+
+svc_cv <- train(blueprint, 
+                data = __________,
+                method = __________,               
+                trControl = __________,
+                tuneGrid = __________,
+                metric = __________)
+```
+
+
+```{r}
+set.seed(052323)   # set seed
+
+# CV with support vector machine with polynomial kernel
+
+param_grid_poly <- expand.grid(degree = c(1, 2, 3, 4),
+                               scale = c(0.5, 1, 1.5, 2),
+                               C = c(0.001, 0.1, 1, 5, 10, 100))
+
+svm_poly_cv <- train(blueprint, 
+                     data = __________,
+                     method = __________, 
+                     trControl = __________,
+                     tuneGrid = __________,
+                     metric = __________)
+```
+
+
+```{r}
+set.seed(052323)   # set seed
+
+# CV with support vector machine with radial basis function kernel
+
+param_grid_radial <- expand.grid(sigma = c(0.5, 1, 1.5, 2),
+                                 C = c(0.001, 0.1, 1, 5, 10, 100))
+
+svm_radial_cv <- train(blueprint,
+                       data = __________,
+                       method = __________,
+                       tuneGrid = __________,
+                       trControl = __________,
+                       metric = __________)  
+```
+
+
+```{r}
+# report the optimal CV Accuracy and the optimal hyperparameters for each model
+
+
+
+
+
+
+
+```
+
+
+```{r}
+# fit the final optimal model, obtain test set predictions, create confusion matrix, and obtain the test set Accuracy
+
+
+
+
+
+
+
+
+```
+
+
+#### ---------------------------------------------------------------------------
+### ROC curve
+
+```{r}
+final_model_prob_preds <- predict(final_model, newdata = baked_test, type = "probabilities")  # probability predictions on test set
+```
+
+
+```{r, fig.align='center', fig.width=4, fig.height=4}
+library(pROC)   # load library
+
+# create object for ROC curve
+
+roc_object <- roc(response = ____________________, predictor = ____________________)
+
+# plot ROC curve
+
+plot(roc_object, col = "red")
+```
+
+
+```{r}
+# obtain AUC's
+
+auc(roc_object)
+```
+
+
+#### ---------------------------------------------------------------------------

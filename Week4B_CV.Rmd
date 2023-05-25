@@ -196,11 +196,21 @@ knn_cv <- train(form = mpg ~ horsepower,
 
 ```{r}
 knn_cv   # CV results
+
+knn_cv$bestTune #optimal value of K
+
+min(knn_cv$results$RMSE) # corresponding optimal RMSE
+
+knn_cv$resample  # this shows results of all folds all repeats for the optimal K
+
+mean(knn_cv$resample$RMSE) # another way to get the optimal RMSE (averaging over all folds all repeats)
 ```
 
 
 ```{r, fig.align='center'}
-ggplot(knn_cv)   # plot CV results for different 'k'
+ggplot(knn_cv)   # plot CV results of RMSE for different 'k'
+
+# left of the plot is underfit while right is overfit becuase when K increases bias increases and variance descreases.
 ```
 
 
@@ -211,6 +221,7 @@ knn_cv$finalModel   # final model
 
 # obtain predictions on test data
 final_model_preds <- predict(object = knn_cv, newdata = Auto_test)
+# final_model <- knnreg(formula = mpg ~ horsepower, data = Auto_train, k = knn_cv$bestTune$K) another way
 
 # estimate test set prediction error
 sqrt(mean((Auto_test$mpg - final_model_preds)^2))    # RMSE

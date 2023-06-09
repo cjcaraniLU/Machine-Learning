@@ -1,0 +1,202 @@
+---
+title: "Week 10 Codes - Unsupervised Learning"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+```
+
+
+#### ---------------------------------------------------------------------------
+### Principal Components Analysis (PCA): USArrests Dataset
+
+
+```{r, message=FALSE}
+library(ISLR2)   # load package
+
+data("USArrests")   # load dataset
+```
+
+
+```{r}
+# check for missing entries and variable types
+# dataset should not have missing entries and all variables should be numerical and standardized (center and scale)
+
+sum(is.na(USArrests))
+
+summary(USArrests)
+```
+
+
+```{r}
+# implement PCA
+
+pca <- prcomp(USArrests, center = TRUE, scale = TRUE)   
+```
+
+
+```{r}
+pca     # results
+#PCs are linear combinations of original variables. 
+# Loadings of the first PC: -0.53, 0.41, -0.34, and 0.64 
+```
+
+
+```{r}
+summary(pca)    # proportion of variance explained
+
+# instead of representing my dataset in term of 4 variables, I can represent it in terms of 3 PCs
+```
+
+
+```{r}
+pca$rotation   # principal component loading vectors, phi's
+```
+
+
+```{r}
+pca$rotation[,1]   # first PC loading vector
+sum(pca$rotation[,1]^2) # some of squares of the loading vector is 1, 'normalized'
+sum(pca$rotation[,1]*pca$rotation[,2]) # PC's are orthogonal (perpendicular)
+```
+
+
+```{r}
+pca$x  # principal component scores, z's
+```
+
+
+```{r}
+biplot(pca, scale = 0, cex = 0.6)   # biplot
+```
+
+
+```{r}
+# correlation matrix
+
+cor(USArrests)
+
+# Murder, Assualt and Rape are highly correlated
+```
+
+
+```{r}
+screeplot(pca, type = "lines")   # screeplot to assess number of PCs
+```
+
+
+
+#### ---------------------------------------------------------------------------
+### K-Means Clustering: iris Dataset
+
+
+```{r}
+data("iris")   # load dataset
+
+iris <- iris %>% dplyr::select(-Species)  # remove variable 'Species'
+```
+
+
+```{r, message=FALSE}
+### K-means clustering animation with two features ###
+
+library(animation)   # Load package
+
+# scale the two variables we will be working with, those are, petal.width and petal.length
+df <- scale(iris[,3:4])
+
+# animation of K-means clustering with K=3 (run this in the console and keep the plot window open)
+kmeans.ani(df, centers = 3)
+
+# points are randomly assigned to a cluster
+# alternates between two steps - finds the center, - assign a point to the cluster with the nearest center
+```
+
+
+```{r}
+iris_scaled <- scale(iris, center = TRUE, scale = TRUE)    # scale dataset
+```
+
+
+```{r}
+# perform K-means clustering
+
+set.seed(053023)
+
+km <- kmeans(iris_scaled, centers = 3, nstart = 20) # K = 3, and 20 different starting cluster assignments
+```
+
+
+```{r}
+km   # results
+```
+
+
+```{r}
+# plot clusters
+
+library(factoextra)
+
+fviz_cluster(object = km, 
+             data = iris_scaled, 
+             geom=c("point", "text"))
+```
+
+
+```{r}
+# to check for an appropriate number of clusters
+
+fviz_nbclust(x = iris_scaled,    
+             FUNcluster = kmeans, 
+             method = "wss",
+             k.max = 25) 
+```
+
+
+
+#### ---------------------------------------------------------------------------
+### Hierarchical Clustering: iris Dataset
+
+```{r}
+iris_scaled_dist <- dist(iris_scaled, method = "euclidean")   # compute distance matrix
+```
+
+
+```{r}
+# hierarchical clustering with complete linkage
+
+hclust_complete <- hclust(iris_scaled_dist, method = "complete")
+
+plot(hclust_complete, cex = 0.5)
+```
+
+
+```{r}
+cutree(hclust_complete, k = 3)   # cut the dendrogram to obtain 3 clusters
+```
+
+
+```{r}
+cutree(hclust_complete, h = 5)   # cut the dendrogram at height 5
+```
+
+
+```{r}
+table(cutree(hclust_complete, k = 3))   # cluster sizes
+```
+
+
+```{r}
+# to check for an appropriate number of clusters
+
+fviz_nbclust(iris_scaled, 
+             FUNcluster = hcut, 
+             method = "wss",
+             k.max = 25) 
+```
+
+
+#### ---------------------------------------------------------------------------
